@@ -2,7 +2,6 @@ import json
 import ipyleaflet as pl
 import ipywidgets as pw
 
-
 # ----------------------------------------------------------------------------
 # the above domain
 
@@ -16,61 +15,58 @@ with open(domain_json, 'r') as file:
         "fillOpacity": 0}
     domain_layer = pl.GeoJSON(data=above_domain)
 
+# ---------------------------------------------------------------------------- 
+# the above grid (not using C because too fine)
+
+grid_json = ("data/ABoVE_240m_30m_5m_grid_tiles/"
+            "ABoVE_240m_30m_5m_grid_tiles.json")
+
+gridA, gridB = [], []
+with open(grid_json, 'r') as file:
+    above_grid = json.load(file)
+    
+    for feat in above_grid["features"]:
+        prop = feat["properties"]
+        level = prop["grid_level"]
+        prop = prop.update({
+            "style": {
+                "weight": 0.75,
+                "color": "aliceblue",
+                "fillOpacity": 0}})
+        
+        if level in ["A", "B"]:
+            
+            cell = pl.GeoJSON(
+                data=feat,
+                hover_style = {
+                    "weight": 1,
+                    "color": "aliceblue",
+                    "fillColor": "#FFFFFF",
+                    "fillOpacity": 0.4})       # make geojson map layer
+
+            if level=="A": 
+                gridA.append(cell)
+            if level=="B": 
+                gridB.append(cell)
 
 # ----------------------------------------------------------------------------
 # map widget interface
 
 # load a basemap layer from ESRI service
 esri = pl.basemap_to_tiles(pl.basemaps.Esri.WorldImagery)
-gibs = pl.basemap_to_tiles(pl.basemaps.NASAGIBS.ModisTerraTrueColorCR, "2019-01-01")
+#gibs = pl.basemap_to_tiles(pl.basemaps.NASAGIBS.ModisTerraTrueColorCR, "2019-01-01")
 
-gridA = pl.LayerGroup()
-gridB = pl.LayerGroup()
+gridA_layer = pl.LayerGroup(layers=tuple(gridA))
+gridB_layer = pl.LayerGroup(layers=tuple(gridB))
 
 # initialize map widget
 m = pl.Map(
-    layers=(esri, domain_layer, gridB, ), #gridA
-    center=(65, -150), 
-    zoom=5, 
+    layers=(esri, gridB_layer, ),
+    center=(60, -135), 
+    zoom=2, 
     scroll_wheel_zoom=True)
-m.add_control(pl.LayersControl())
 
-
-# ---------------------------------------------------------------------------- 
-# the above grid (not using C because too fine)
-
-grid_table = {"A": {}, "B": {}, "C": {}}
-grid_json = ("data/ABoVE_240m_30m_5m_grid_tiles/"
-            "ABoVE_240m_30m_5m_grid_tiles.json")
-
-with open(grid_json, 'r') as file:
-    above_grid = json.load(file)
-    
-    for feat in above_grid["features"]:
-        prop = feat["properties"]          # collect grid cell properties
-        level = prop["grid_level"]         # get level A, B, or C
-        feat["properties"]["style"] = {
-            "weight": 0.75,
-            "color": "aliceblue",
-            "fillOpacity": 0}
-        
-        id = prop["grid_id"]               # get grid cell id
-        cell = pl.GeoJSON(
-            data=feat,
-            hover_style = {
-                "weight": 1,
-                "color": "aliceblue",
-                "fillColor": "#FFFFFF",
-                "fillOpacity": 0.4})       # make geojson map layer
-        grid_table[level][id] = cell
-
-        if level=="A": 
-            gridA.add_layer(cell)
-        elif level=="B": 
-            gridB.add_layer(cell)
-        else:
-            pass
-
+#m.add_control(pl.LayersControl())
 
 # ----------------------------------------------------------------------------
 # JSON input interface
@@ -87,7 +83,21 @@ geojson_text = pw.Textarea(
     layout=pw.Layout(width="auto", height="200px"))
 
 
+# -------------------------------------------------------------------------------
+# map draw controls
+
+draw_control = pw.DrawControl()
+draw_control.polyline =  {}
+draw_control.polygon = {}
+draw_control.circle = {}
+draw_control.rectangle = {
+    "shapeOptions": {
+        "fillColor": "#fca45d",
+        "color": "#fca45d",
+        "fillOpacity": 1.0}}
+m.add_control(draw_control)
 
 # -------------------------------------------------------------------------------
 # display!
-display(pw.VBox([geojson_label, geojson_text, m]))
+
+display(pw.VBox([m, geojson_label, geojson_text]))
