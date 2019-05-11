@@ -1,13 +1,14 @@
 import json
 import pandas as pd
 
-from shapely.geometry import shape
+from shapely.geometry import shape, mapping
 from shapely.ops import cascaded_union
 
+import qgrid
 from ipyleaflet import Map,LayerGroup,DrawControl,GeoJSON,basemaps,basemap_to_tiles,Polygon
 from ipywidgets import HTML,Layout,HBox,VBox,Textarea,Output
 
-from Query import *
+from QueryCMR import *
 
 # ---------------------------------------------------------------------------- 
 # statics
@@ -23,7 +24,12 @@ with open(domainf, 'r') as file:
     above_domain = json.load(file)
 
 # get some info about ABoVE collection in CMR for ORNL
-ornl_above = query_ornl_projects()
+above_search = collections.keyword("*Boreal Vulnerability Experiment*").get_all()
+above_results = [r for r in above_search if any([
+    "ABoVE" in r["dataset_id"],
+    "ABoVE" in r["summary"]])
+]
+above_results_df = pd.DataFrame(above_results)
 
 # load a basemap from ESRI #basemaps.NASAGIBS.ModisTerraTrueColorCR
 esri = basemap_to_tiles(basemaps.Esri.WorldImagery)
@@ -39,6 +45,7 @@ draw_style = {
 # JSON input interface and some other ui elements
 
 geojson_label = HTML("<h4><b> or paste your GeoJSON: </b></h4>")
+
 geojson_text = Textarea(
     placeholder='Paste GeoJSON string here.',
     disabled=False,
@@ -48,7 +55,8 @@ above_domain["features"][0]["properties"]["style"] = {
     "weight": 0.75,
     "color": "#FFFFFF",
     "fillColor": "#FFFFFF",
-    "fillOpacity": 0}
+    "fillOpacity": 0.}
+
 domain_layer = GeoJSON(data=above_domain)
 
 header = HTML(
@@ -58,6 +66,16 @@ instruct =  HTML(
     "<p><b>Instructions:</p><p><b>1.<br>2.<br>3.<br>...</p>",
     layout=Layout(width="50%"))
 
+displaycols = [
+    "dataset_id",
+    "title",
+    "time_start",
+    "time_end",
+    "boxes",
+    "links",
+    "id",
+    "summary"
+]
 
 # ---------------------------------------------------------------------------- 
 # class to manage toggled grid cells
@@ -77,7 +95,8 @@ class Cell(object):
 
         self.prop = feat["properties"]
         self.feat["properties"]["style"] = {
-            "fill_opacity": 0., 
+            "fill_opacity": 0.1,
+            "opacity": 0.1, 
             "color": "white", 
             "weight": 0.75}
         self.id = self.prop["grid_id"]
@@ -89,7 +108,7 @@ class Cell(object):
                 "weight": 1, 
                 "color": "white",
                 "fillColor": "white",
-                "fillOpacity": 0.8})
+                "fillOpacity": 0.3})
         self.layer.on_click(self.toggle)
         self.on = False
 
@@ -129,7 +148,7 @@ class App():
         self.map = Map(
             layers=(esri, self.grid_layers, self.selected_layer, ),
             center=(65, -100), 
-            zoom=2, 
+            zoom=3, 
             width="auto", 
             height="auto",
             scroll_wheel_zoom=True)
@@ -145,24 +164,20 @@ class App():
         self.draw_control.rectangle = {**draw_style}
         self.draw_control.on_draw(self.update_selected_cells)
         self.map.add_control(self.draw_control)
-
         
         # output display
-        self.output = Output(layout=Layout(width="auto"))
+        self.output = Output(layout=Layout(width="auto", height="auto"))
         
         # make the widget layout
         self.ui = VBox([
-            header, 
-            HBox([instruct, geojson_text]),
+            #header, 
+            #HBox([instruct, geojson_text]),
             self.map,
             self.output
         ], layout=Layout(width="auto"))
 
         # display ui
         display(self.ui)
-
-
-    # ------------------------------------------------------------------------
 
 
     def update_selected_cells(self, *args, **kwargs):
@@ -176,44 +191,60 @@ class App():
         # make shapely geom from geojson 
         drawn_json = kwargs["geo_json"]
         shapely_geom = shape(drawn_json["geometry"])
-
-        # iterate over cells and toggle selected
         cells = self.grid_dict
-        on = []
+        
+        # iterate over cells and collect intersecting cells
+        on = [] 
         for id, cell in cells.items():
-            
-            # if drawn_geom intersects cell.shape, toggle
             if shapely_geom.intersects(cell.shape):
-                #cell.toggle()                                              # no toggling for now, only pick select
-                #cells[id] = cell
                 on.append(cell.shape)
         
-        # get the union of all of the cells that are toggled on
-        #union = cascaded_union([c.shape for c in cells.values() if c.on])  # no toggling for now, only pick select
-        union = cascaded_union(on)
+        # this is blatant abuse of try/except; fix it 
+        try:
+            # get the union of all of the cells that are toggled on
+            union = cascaded_union(on)
+            centroid = union.centroid
 
-        # make layer that represents selected cells and add to selected_layer
-        self.selected_layer.clear_layers()
-        x,y = union.exterior.coords.xy
-        self.selected_layer.add_layer(Polygon(locations=list(zip(y,x))))
-        
-        # --------------------------------------------------------------------
-        # find all CMR collections that intersect with merged cells geom
+            # make layer that represents selected cells and add to selected_layer
+            self.selected_layer.clear_layers()
+            x,y = union.exterior.coords.xy
+            self.selected_layer.add_layer(Polygon(locations=list(zip(y,x))))
+            self.map.center = (centroid.y, centroid.x)
 
-        selected = []
-        for index, collection in ornl_above.iterrows():
-            
-            box = collection.boxes
-            shapely_box = CMR_box_to_Shapely_box(box[0])
-            
-            # intersect: use shapely_geom if strictly using drawn poly
-            intersect_bool = shapely_box.intersects(union) 
-            if intersect_bool:
-                selected.append(index)
+            # --------------------------------------------------------------
+            # find all CMR collections that intersect with merged cells geom
 
-        selected_collections = ornl_above.iloc[selected]
-        with self.output:
-            display(selected_collections)
+            selected = []
+            for index, collection in above_results_df.iterrows():
+                box = collection.boxes
+                shapely_box = CMR_box_to_Shapely_box(box[0])
+
+                # intersect: use shapely_geom if strictly using drawn poly
+                intersect_bool = shapely_box.intersects(union) 
+                if intersect_bool:
+                    selected.append(index)
+
+            self.coll = above_results_df.iloc[selected]
+
+            self.tab = qgrid.show_grid(
+                self.coll[[
+                     "dataset_id",
+                     "time_start",
+                     "time_end",
+                     "boxes"]], 
+                grid_options={'forceFitColumns': False, 
+                              'minColumnWidth': "0",
+                              'maxColumnWidth': "400"},
+                show_toolbar=False)
+
+            self.output.clear_output()
+            with self.output:
+                display(self.tab)
+                #display(self.coll[[
+                #    "dataset_id", "time_start", "time_end", "boxes"]])
+                
+        except:
+            pass
 
 
 ##############################################################################
