@@ -6,7 +6,7 @@ channels:
 dependencies:
   - ipyleaflet=0.10.2=py37_0
   - ipywidgets=7.4.2=py37_0
-  - pandas=0.24.2=py37h6538335_0
   - qgrid=1.1.1=py37_1001
   - requests=2.21.0=py37_0
-  - shapely=1.6.4=py37h8921fb9_1003
+  - pandas
+  - shapely
