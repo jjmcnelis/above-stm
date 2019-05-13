@@ -58,7 +58,7 @@ with open(repo+'data/above_granules_table.pkl', 'rb') as input:
 granule_locator_table = above_granules_table[[
     "collection_short_name",
     "conceptid",
-    "granuleid",
+    "granuleid",   
     "bounds_shapely",
     "start_time",
     "end_time",
@@ -107,8 +107,9 @@ esri = basemap_to_tiles(basemaps.Esri.WorldImagery)
 
 # map draw poly styling
 draw_style = {"shapeOptions": {
-    "fillColor": "lightgreen",
-    "color": "lightgreen",
+    "fillColor": "white",
+    "color": "white",
+    "opacity": 0.5,
     "fillOpacity": 0.5}}
 
 geojson_label = HTML("<h4><b> or paste your GeoJSON: </b>0</h4>")
@@ -268,8 +269,8 @@ def get_qgrid(df, index, column_definitions, grid_options):
 granules_box_style = {
     "fill_opacity": 0.1,
     "fill_color": "orange",
-    "opacity": 0.8, 
-    "color": "orange", 
+    "opacity": 1, 
+    "color": "white", 
     "weight": 1}
 
 
@@ -317,10 +318,10 @@ def handle_granule_table_select(event, qgrid_widget):
 # dataset selections grid styling
 datasets_grid_style = {
     "fill_opacity": 0.1,
-    "opacity": 0.8, 
-    "color": "purple", 
+    "opacity": 1, 
+    "color": "white", 
     "fill_color": "purple",
-    "weight": 2}
+    "weight": 1}
 
 
 def handle_dataset_table_select(event, qgrid_widget):
@@ -338,8 +339,15 @@ def handle_dataset_table_select(event, qgrid_widget):
     short_name = dataset["short_name"].item()
 
     # get the dataset's granules by indexing with the short_name
-    granules = dfsel(granule_locator_table, "collection_short_name", short_name)
-    granules1 = granules[["granuleid","url_datapool"]]
+    granules = dfsel(
+        granule_locator_table, 
+        "collection_short_name", 
+        short_name)
+    granules1 = granules[[
+        "granuleid", 
+        "start_time",
+        "end_time",
+        "url_datapool"]]
     
     granules_qgrid = get_qgrid(
         granules1, 
@@ -370,6 +378,23 @@ def update_rendered_dataset_table(dataset_selection_table):
     with output_datasets:
         display(dataset_results_header)
         display(datasets_qgrid)
+
+
+def update_rendered_granule_table(granule_selection_table):
+    """ """
+
+    # make new qgrids
+    granules_qgrid = get_qgrid(
+        granule_selection_table, 
+        "granuleid", 
+        granule_column_definitions,
+        {"forceFitColumns": False, "maxVisibleRows": 15})
+    granules_qgrid.on("selection_changed", handle_granule_table_select)
+
+    output_granules.clear_output()
+    with output_granules:
+        display(granules_results_header)
+        display(granules_qgrid)
 
 
 """
@@ -403,9 +428,13 @@ def update_cell_clicked(*args, **kwargs):
 
             # get granules with bboxes that intersect cell
             selections, shapelies = get_by_tiles([on], "granules")
-            selections1 = selections["granuleid"] #, "start_time", "end_time"
+            selections1 = selections[[
+                "granuleid", 
+                "start_time",
+                "end_time",
+                "url_datapool"]]
             style1 = granules_box_style
-            function1 = update_rendered_dataset_table
+            function1 = update_rendered_granule_table
 
         # make layer that represents selected cell, add to selected_layer
         selected_layer.clear_layers()
@@ -457,16 +486,42 @@ def update_poly_drawn(*args, **kwargs):
         mapw.center = (centroid.y, centroid.x)
         mapw.zoom = 4
 
-        # get datasets and display table(s)
-        datasets, shapelies = get_by_tiles(on, "datasets")
-        datasets1 = datasets[["title", "start_time", "end_time"]]
+        # --------------------------------------------------------------------
+        if output_containers.selected_index==0:
+
+            # get datasets with bboxes that intersect cell
+            selections, shapelies = get_by_tiles(on, "datasets")
+            selections1 = selections[["title", "start_time", "end_time"]]
+            style1 = datasets_grid_style
+            function1 = update_rendered_dataset_table
+
+        if output_containers.selected_index==1:
+
+            # get granules with bboxes that intersect cell
+            selections, shapelies = get_by_tiles(on, "granules")
+            selections1 = selections[[
+                "granuleid", 
+                "start_time",
+                "end_time",
+                "url_datapool"]]
+            style1 = granules_box_style
+            function1 = update_rendered_granule_table
 
         # render new results tables
-        update_rendered_dataset_table(datasets1)
+        function1(selections1)
+
+        # --------------------------------------------------------------------
+
+        # get datasets and display table(s)
+        #datasets, shapelies = get_by_tiles(on, "datasets")
+        #datasets1 = datasets[["title", "start_time", "end_time"]]
+
+        # render new results tables
+        #update_rendered_dataset_table(datasets1)
 
     else:
         
-        print("TESTING")
+        pass
 
 
 """
@@ -524,12 +579,14 @@ output_containers.set_title(1, 'CMR Granules')
 output_containers.selected_index = 0
 with output_datasets:
     display(HTML(
-        "<h3><b>Browse datasets and files in CMR with the ABoVE Grid</b></h3>"
-        "Datasets and Granules via the ABoVE Grid (B)"
         "<p><b>Select one or more grid cells by clicking the cell on the map"
         ", or by drawing a polygon with one of the tools on the left.</b></p>"
     ))
-
+with output_granules:
+    display(HTML(
+        "<p><b>Select one or more grid cells by clicking the cell on the map"
+        ", or by drawing a polygon with one of the tools on the left.</b></p>"
+    ))
 
 def update_container(*args, **kwargs):
     """ 
@@ -538,7 +595,7 @@ def update_container(*args, **kwargs):
     if output_containers.selected_index==0:
         selected_grans.clear_layers()
     else:
-        print("TESTING")
+        pass
 output_containers.observe(update_container)
 
 # make the widget layout

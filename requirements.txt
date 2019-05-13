@@ -1,6 +1,6 @@
-ipyleaflet
-ipywidgets
-qgrid
+ipyleaflet==0.10.2
+ipywidgets==7.4.2
+qgrid==1.1.1
 requests
 pandas
 shapely
