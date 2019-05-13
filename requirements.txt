@@ -3,3 +3,4 @@ ipywidgets
 qgrid
 requests
 pandas
+shapely
