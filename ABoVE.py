@@ -142,7 +142,6 @@ granules_results_header = get_results_header((
     "The granules in the table below have bounding boxes that "
     "intersect the selected ABoVE Grid cell(s). An empty table "
     "indicates that the publication process is likely in progress. "
-    "<br><br>Browsing granules by location is "
     "<br><br><b>Select a granule (or a list of granules with "
     "Ctrl+Click or Ctrl+Shift) to display spatial coverages on "
     "the map:</b>"))
@@ -412,6 +411,7 @@ def get_selection_polygon(locations, style):
 def update_cell_clicked(*args, **kwargs):
     """ """
     draw_control.clear()
+    selected_grans.clear_layers()
 
     if "properties" in kwargs.keys():
         on = kwargs["properties"]["grid_id"]
@@ -457,6 +457,7 @@ def update_poly_drawn(*args, **kwargs):
     """ """
   
     draw_control.clear()                       # clear draw, selection layers
+    selected_grans.clear_layers()
 
     if "geo_json" in kwargs.keys():
        
@@ -594,6 +595,8 @@ def update_container(*args, **kwargs):
     """
     if output_containers.selected_index==0:
         selected_grans.clear_layers()
+    elif output_containers.selected_index==1:
+        pass                                       # placeholder
     else:
         pass
 output_containers.observe(update_container)
