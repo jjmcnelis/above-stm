@@ -20,7 +20,8 @@ except ModuleNotFoundError:
     import pickle
 
 # path to above-stm
-repo = "/home/jack/Desktop/git/above-stm/"
+#repo = "/home/jack/Desktop/git/above-stm/"
+repo = "./"
 
 """
 ------------------------------------------------------------------------------

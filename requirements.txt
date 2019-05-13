@@ -1,2 +1,5 @@
 ipyleaflet
 ipywidgets
+qgrid
+requests
+pandas
